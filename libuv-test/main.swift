@@ -92,7 +92,9 @@ class Stream {
 
 extension Stream {
     // <<AcceptAndListen>>
-    func listen(backlog numConnections: Int, callback: uv_connection_cb) throws -> () {
+    func listen(backlog numConnections: Int, callback: uv_connection_cb)
+        throws -> () 
+    {
         let result = uv_listen(stream, Int32(numConnections), callback)
         if result < 0 { throw UVError.Error(code: result) }
     }
