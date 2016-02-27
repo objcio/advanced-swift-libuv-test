@@ -96,14 +96,12 @@ extension Stream {
         let result = uv_listen(stream, Int32(numConnections), callback)
         if result < 0 { throw UVError.Error(code: result) }
     }
-    // <</AcceptAndListen>>
 
-    // <<AcceptAndListen2>>
     func accept(client: Stream) throws -> () {
         let result = uv_accept(stream, client.stream)
         if result < 0 { throw UVError.Error(code: result) }
     }
-    // <</AcceptAndListen2>>
+    // <</AcceptAndListen>>
 
     // <<CloseAndFree>>
     func closeAndFree() {
@@ -122,16 +120,15 @@ final class Box<A> {
 // <<RetainedVoidPointer>>
 // Retains the value A if it's non-nil
 func retainedVoidPointer<A>(x: A?) -> UnsafeMutablePointer<Void> {
-    guard let value = x else { return UnsafeMutablePointer() }
+    guard let value = x else { return nil }
     let unmanaged = Unmanaged.passRetained(Box(value))
     return UnsafeMutablePointer(unmanaged.toOpaque())
 }
 
-// Releases the value inside the pointer, and returns it
+// Releases the value inside the pointer and returns it
 func releaseVoidPointer<A>(x: UnsafeMutablePointer<Void>) -> A? {
     guard x != nil else { return nil }
-    return Unmanaged<Box<A>>.fromOpaque(COpaquePointer(x))
-        .takeRetainedValue().unbox
+    return Unmanaged<Box<A>>.fromOpaque(COpaquePointer(x)).takeRetainedValue().unbox
 }
 // <</RetainedVoidPointer>>
 
@@ -139,8 +136,7 @@ func releaseVoidPointer<A>(x: UnsafeMutablePointer<Void>) -> A? {
 // Returns the value inside the pointer without releasing
 func unsafeFromVoidPointer<A>(x: UnsafeMutablePointer<Void>) -> A? {
     guard x != nil else { return nil }
-    return Unmanaged<Box<A>>.fromOpaque(COpaquePointer(x))
-        .takeUnretainedValue().unbox
+    return Unmanaged<Box<A>>.fromOpaque(COpaquePointer(x)).takeUnretainedValue().unbox
 }
 // <</UnsafeFromVoidPointer>>
 
@@ -222,15 +218,17 @@ extension Stream {
     // <<TCPListenBlock>>
     func listen(numConnections: Int, theCallback: ListenBlock) throws -> () {
         context.listenBlock = theCallback
-        try listen(backlog: numConnections, callback: { serverStream, status in
+        try listen(backlog: numConnections) { serverStream, status in
             let stream = Stream(serverStream)
             stream.context.listenBlock?(status: Int(status))
-        })
+        }
     }
     // <</TCPListenBlock>>
 
-    func write(completion: () -> ())(buffer: BufferRef) {
-        Write().writeAndFree(self, buffer: buffer, completion: completion)
+    func write(completion: () -> ()) -> BufferRef -> () {
+        return { buffer in
+            Write().writeAndFree(self, buffer: buffer, completion: completion)
+        }
     }
 
 }
@@ -242,12 +240,12 @@ class Write {
         assert(writeRef != nil)
 
         writeRef.memory.data = retainedVoidPointer(completion)
-        uv_write(writeRef, stream.stream, buffer, 1, { x, _ in
+        uv_write(writeRef, stream.stream, buffer, 1) { x, _ in
             let completionHandler: () -> () = releaseVoidPointer(x.memory.data)!
             free(x.memory.bufs)
             free(x)
             completionHandler()
-        })
+        }
     }
 }
 
